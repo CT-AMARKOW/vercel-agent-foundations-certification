@@ -1,17 +1,8 @@
-/**
- * Welcome! This is the chat panel you will edit for the workshop!
- *
- * During the workshop you'll connect it to a real agent: swap the
- * local `useState` for `useChat` from the AI SDK, point the form
- * at `sendMessage`, and render each message's `parts` inside
- * `<ConversationContent>`.
- *
- * Workshop docs: https://agent-foundations-certification.vercel.app/docs/chat-agent
- */
 "use client";
 
 import { useChat } from "@ai-sdk/react";
-import { useState } from "react";
+import { WorkflowChatTransport } from "@ai-sdk/workflow/client";
+import { useMemo, useState } from "react";
 import {
   Conversation,
   ConversationContent,
@@ -28,18 +19,35 @@ import {
   PromptInputTools,
 } from "@/components/ai-elements/prompt-input";
 import type { ShoppingAgentUIMessage } from "@/lib/agent";
-import { AgentProductCard } from "./agent-product-card";
 import { AgentProductList } from "./agent-product-list";
+import { AgentProductCard } from "./agent-product-card";
 
 export function AgentChat() {
   const [input, setInput] = useState("");
 
-  const { messages, error, sendMessage, status, stop } =
-    useChat<ShoppingAgentUIMessage>();
-  const isGenerating = status === "submitted" || status === "streaming";
+  const activeRunId = useMemo(() => {
+    if (typeof window === "undefined") return undefined;
+    return localStorage.getItem("active-workflow-run-id") ?? undefined;
+  }, []);
+
+  const { messages, error, sendMessage } = useChat<ShoppingAgentUIMessage>({
+    resume: Boolean(activeRunId),
+    transport: new WorkflowChatTransport({
+      api: "/api/chat",
+      onChatSendMessage: (response) => {
+        const runId = response.headers.get("x-workflow-run-id");
+        if (runId) localStorage.setItem("active-workflow-run-id", runId);
+      },
+      onChatEnd: () => localStorage.removeItem("active-workflow-run-id"),
+      prepareReconnectToStreamRequest: ({ api, ...rest }) => {
+        const runId = localStorage.getItem("active-workflow-run-id");
+        if (!runId) throw new Error("No active workflow run ID found");
+        return { ...rest, api: `/api/chat/${encodeURIComponent(runId)}/stream` };
+      },
+    }),
+  });
 
   const handleSubmit = (message: PromptInputMessage) => {
-    if (isGenerating || !input.trim()) return;
     sendMessage({ text: input });
     setInput("");
   };
@@ -74,9 +82,6 @@ export function AgentChat() {
               }
             }),
           )}
-          {status === "submitted" && (
-            <div className="text-sm text-muted-foreground">Thinking…</div>
-          )}
         </ConversationContent>
         <ConversationScrollButton />
       </Conversation>
@@ -92,11 +97,7 @@ export function AgentChat() {
           </PromptInputBody>
           <PromptInputFooter>
             <PromptInputTools />
-            <PromptInputSubmit
-              status={status}
-              onStop={stop}
-              disabled={!isGenerating && !input.trim()}
-            />
+            <PromptInputSubmit status="ready" disabled={!input.trim()} />
           </PromptInputFooter>
         </PromptInput>
       </div>
