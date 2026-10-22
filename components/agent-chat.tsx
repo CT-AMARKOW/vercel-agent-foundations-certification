@@ -1,5 +1,3 @@
-"use client";
-
 /**
  * Welcome! This is the chat panel you will edit for the workshop!
  *
@@ -10,12 +8,16 @@
  *
  * Workshop docs: https://agent-foundations-certification.vercel.app/docs/chat-agent
  */
+"use client";
+
+import { useChat } from "@ai-sdk/react";
 import { useState } from "react";
 import {
   Conversation,
   ConversationContent,
   ConversationScrollButton,
 } from "@/components/ai-elements/conversation";
+import { Message, MessageContent, MessageResponse } from "@/components/ai-elements/message";
 import {
   PromptInput,
   PromptInputBody,
@@ -25,16 +27,57 @@ import {
   PromptInputTextarea,
   PromptInputTools,
 } from "@/components/ai-elements/prompt-input";
+import type { ShoppingAgentUIMessage } from "@/lib/agent";
+import { AgentProductCard } from "./agent-product-card";
+import { AgentProductList } from "./agent-product-list";
 
 export function AgentChat() {
   const [input, setInput] = useState("");
 
-  const handleSubmit = (message: PromptInputMessage) => {};
+  const { messages, error, sendMessage, status, stop } =
+    useChat<ShoppingAgentUIMessage>();
+  const isGenerating = status === "submitted" || status === "streaming";
+
+  const handleSubmit = (message: PromptInputMessage) => {
+    if (isGenerating || !input.trim()) return;
+    sendMessage({ text: input });
+    setInput("");
+  };
+
+  if (error) return <div>{error.message}</div>;
 
   return (
     <div className="flex h-full min-h-0 flex-col">
       <Conversation className="flex-1">
-        <ConversationContent>{null}</ConversationContent>
+        <ConversationContent>
+          {messages.map((m) =>
+            m.parts.map((p, i) => {
+              switch (p.type) {
+                case "text":
+                  return (
+                    <Message key={`${m.id}-${i}`} from={m.role}>
+                      <MessageContent>
+                        <MessageResponse>{p.text}</MessageResponse>
+                      </MessageContent>
+                    </Message>
+                  );
+                case "tool-searchProducts":
+                  return (
+                    <AgentProductList key={`${m.id}-${i}`} invocation={p} />
+                  );
+                case "tool-getProductDetails":
+                  return (
+                    <AgentProductCard key={`${m.id}-${i}`} invocation={p} />
+                  );
+                default:
+                  return null;
+              }
+            }),
+          )}
+          {status === "submitted" && (
+            <div className="text-sm text-muted-foreground">Thinking…</div>
+          )}
+        </ConversationContent>
         <ConversationScrollButton />
       </Conversation>
 
@@ -49,7 +92,11 @@ export function AgentChat() {
           </PromptInputBody>
           <PromptInputFooter>
             <PromptInputTools />
-            <PromptInputSubmit status="ready" disabled={!input.trim()} />
+            <PromptInputSubmit
+              status={status}
+              onStop={stop}
+              disabled={!isGenerating && !input.trim()}
+            />
           </PromptInputFooter>
         </PromptInput>
       </div>
