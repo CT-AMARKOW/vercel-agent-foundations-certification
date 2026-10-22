@@ -86,6 +86,13 @@ export const returnOrder = tool({
   }),
   execute: async ({ orderId, reason }) => {
     "use step";
+    try {
+      await getOrder(orderId);
+    } catch (err) {
+      const message =
+        err instanceof ApiRequestError ? err.message : "Unknown error";
+      return { error: `Couldn't find order ${orderId}: ${message}` };
+    }
     const run = await start(returnFlow, [orderId, reason]);
     return { runId: run.runId, message: `Return request received for order ${orderId}.` };
   },
