@@ -5,11 +5,10 @@
  *
  * Workshop docs: https://vercel-agent-foundations-certification-guide.vercel.app/docs/workflow
  */
-
 import { chatFlow } from "@/lib/workflows/chat-flow";
 import { createModelCallToUIChunkTransform } from "@ai-sdk/workflow";
-import type { UIMessage } from "ai";
 import { createUIMessageStreamResponse } from "ai";
+import type { UIMessage } from "ai";
 import { start } from "workflow/api";
 
 export async function POST(req: Request) {
